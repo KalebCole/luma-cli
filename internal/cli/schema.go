@@ -24,9 +24,9 @@ var catalog = []commandSpec{
 	{Name: "--version", Description: "Print version and exit 0.", Implemented: true},
 	{Name: "schema", Description: "Print the machine-readable command catalog as JSON and exit 0.", Implemented: true},
 	{Name: "doctor", Description: "Check authentication and connectivity without mutations and exit 0.", Implemented: true},
-	{Name: "auth login", Description: "Store the browser session key from LUMA_AUTH_SESSION_KEY or --key without prompts.", Mutation: true, DryRun: true, Flags: []flagSpec{{Name: "--key", Type: "string", Description: "Browser session key (usr-<id>.<secret>)."}}},
-	{Name: "auth status", Description: "Report authentication status and expiry if known."},
-	{Name: "auth logout", Description: "Clear the stored credential.", Mutation: true, DryRun: true},
+	{Name: "auth login", Description: "Store the browser session key from LUMA_AUTH_SESSION_KEY or --key without prompts.", Implemented: true, Mutation: true, DryRun: true, Flags: []flagSpec{{Name: "--key", Type: "string", Description: "Browser session key (usr-<id>.<secret>)."}}},
+	{Name: "auth status", Description: "Report authentication status and expiry if known.", Implemented: true},
+	{Name: "auth logout", Description: "Clear the stored credential.", Implemented: true, Mutation: true, DryRun: true},
 	{Name: "events list", Description: "List invitations and RSVPs.", Flags: []flagSpec{
 		{Name: "--upcoming", Type: "boolean", Description: "List upcoming invitations and RSVPs."},
 		{Name: "--past", Type: "boolean", Description: "List event history."},

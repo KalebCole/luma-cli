@@ -55,7 +55,7 @@ func TestSchemaMatchesSpec(t *testing.T) {
 		if cmd.Mutation && !cmd.DryRun {
 			t.Fatalf("mutation %q lacks dry-run", cmd.Name)
 		}
-		if cmd.Implemented != (cmd.Name == "--version" || cmd.Name == "schema" || cmd.Name == "doctor") {
+		if cmd.Implemented != (cmd.Name == "--version" || cmd.Name == "schema" || cmd.Name == "doctor" || strings.HasPrefix(cmd.Name, "auth ")) {
 			t.Fatalf("wrong implementation status for %q", cmd.Name)
 		}
 	}
@@ -146,7 +146,7 @@ func TestDoctorChecks(t *testing.T) {
 }
 
 func TestDoctorOutputModesAndExitCode(t *testing.T) {
-	t.Setenv("LUMA_AUTH_SESSION_KEY", "")
+	authConfig(t)
 	for _, tc := range []struct {
 		name string
 		tty  bool

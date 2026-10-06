@@ -43,6 +43,7 @@ func New(version string, stdout, stderr io.Writer) *CLI {
 	c.commands = []command{
 		{name: "schema", run: c.schema},
 		{name: "doctor", run: c.doctor},
+		{name: "auth", run: c.auth},
 	}
 	return c
 }
@@ -82,7 +83,8 @@ func (c *CLI) execute(args []string) error {
 	opts := Options{JSON: !c.isTTY}
 	var positional []string
 	var version, help, endFlags bool
-	for _, arg := range args {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
 		if endFlags {
 			positional = append(positional, arg)
 			continue
@@ -103,6 +105,17 @@ func (c *CLI) execute(args []string) error {
 		case "--help", "-h":
 			help = true
 		default:
+			if len(positional) == 2 && positional[0] == "auth" && positional[1] == "login" && (arg == "--key" || strings.HasPrefix(arg, "--key=")) {
+				positional = append(positional, arg)
+				if arg == "--key" {
+					if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
+						return usageError("missing_key", "--key requires a browser session key.")
+					}
+					i++
+					positional = append(positional, args[i])
+				}
+				continue
+			}
 			if strings.HasPrefix(arg, "-") {
 				return usageError("unknown_flag", "Unknown flag. Use --help for available flags.")
 			}
@@ -133,12 +146,12 @@ func (c *CLI) help(opts Options) error {
 			"ok": true,
 			"data": map[string]any{
 				"usage":    "luma [--json] [--dry-run] <command>",
-				"commands": []string{"schema", "doctor"},
+				"commands": []string{"schema", "doctor", "auth"},
 				"flags":    []string{"--version", "--json", "--dry-run", "--help"},
 			},
 		})
 	}
-	_, err := fmt.Fprintln(c.out, "Usage: luma [--json] [--dry-run] <command>\n\nCommands:\n  schema   Print the full v1 command catalog as JSON\n  doctor   Check authentication and connectivity (read-only)\n\nFlags:\n  --version   Print version\n  --json      Force JSON output\n  --dry-run   Validate without dispatching (mutations only)\n  --help, -h  Show help")
+	_, err := fmt.Fprintln(c.out, "Usage: luma [--json] [--dry-run] <command>\n\nCommands:\n  schema   Print the full v1 command catalog as JSON\n  doctor   Check authentication and connectivity (read-only)\n  auth     login [--key <key>], status, logout\n\nFlags:\n  --version   Print version\n  --json      Force JSON output\n  --dry-run   Validate without dispatching (mutations only)\n  --help, -h  Show help")
 	return err
 }
 

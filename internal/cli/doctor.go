@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"text/tabwriter"
 	"time"
+
+	"github.com/KalebCole/luma-cli/internal/auth"
 )
 
 const doctorURL = "https://api.luma.com/user"
@@ -47,7 +49,16 @@ func (c *CLI) doctor(opts Options, args []string) error {
 	if err := noArguments(args); err != nil {
 		return err
 	}
-	report := checkDoctor(context.Background(), c.doctorClient, doctorURL, os.Getenv("LUMA_AUTH_SESSION_KEY"))
+	key := os.Getenv("LUMA_AUTH_SESSION_KEY")
+	var storeErr error
+	if key == "" {
+		key, storeErr = auth.SessionKey()
+	}
+	report := checkDoctor(context.Background(), c.doctorClient, doctorURL, key)
+	if storeErr != nil {
+		report.Authentication = authCheck{Status: "invalid", Message: "Unable to read the local credential store securely."}
+		report.Healthy = false
+	}
 	if opts.JSON {
 		return c.writeJSON(struct {
 			OK   bool         `json:"ok"`
@@ -67,7 +78,7 @@ func (c *CLI) doctor(opts Options, args []string) error {
 // echoed, since either could contain credential information.
 func checkDoctor(ctx context.Context, client *http.Client, endpoint, key string) doctorReport {
 	r := doctorReport{
-		Authentication: authCheck{Status: "missing", Message: "LUMA_AUTH_SESSION_KEY is not set."},
+		Authentication: authCheck{Status: "missing", Message: "No browser session credential is available."},
 		Connectivity:   connectivityCheck{Status: "unreachable", URL: endpoint, Message: "Unable to reach the Luma API."},
 	}
 	validKey := sessionKeyPattern.MatchString(key)
@@ -102,14 +113,7 @@ func checkDoctor(ctx context.Context, client *http.Client, endpoint, key string)
 		case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
 			r.Authentication = authCheck{Status: "rejected", Message: "Luma rejected the session key; it may have expired."}
 		case resp.StatusCode >= 200 && resp.StatusCode < 300:
-			var body struct {
-				APIID string `json:"api_id"`
-				User  *struct {
-					APIID string `json:"api_id"`
-				} `json:"user"`
-			}
-			if json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&body) == nil &&
-				(body.APIID != "" || body.User != nil && body.User.APIID != "") {
+			if hasUserIdentity(resp.Body) {
 				r.Authentication = authCheck{Status: "authenticated", Authenticated: true, Message: "Luma accepted the browser session key."}
 			} else {
 				r.Authentication.Message = "Luma did not return a verifiable user identity."
@@ -118,4 +122,17 @@ func checkDoctor(ctx context.Context, client *http.Client, endpoint, key string)
 	}
 	r.Healthy = r.Authentication.Authenticated && r.Connectivity.Status == "reachable"
 	return r
+}
+
+// hasUserIdentity shares bounded response validation between auth status and
+// doctor. Anonymous or malformed responses cannot establish authentication.
+func hasUserIdentity(reader io.Reader) bool {
+	var body struct {
+		APIID string `json:"api_id"`
+		User  *struct {
+			APIID string `json:"api_id"`
+		} `json:"user"`
+	}
+	return json.NewDecoder(io.LimitReader(reader, 1<<20)).Decode(&body) == nil &&
+		(body.APIID != "" || body.User != nil && body.User.APIID != "")
 }
