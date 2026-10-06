@@ -6,7 +6,7 @@ Built for the same workflow as [partiful-cli](https://github.com/KalebCole/parti
 
 ## Status
 
-The Go CLI implements `--version`, `schema`, `doctor`, `auth login/status/logout`, `rsvp get`, and `rsvp set --status going`. The full approved command surface is specified in `spec/commands.md`; `schema` includes future commands with `implemented: false`. The `events` group is not implemented yet. RSVP `not-going` and `interested` return `rsvp_status_unverified` until their guest endpoints are captured.
+The Go CLI implements `--version`, `schema`, `doctor`, `auth login/status/logout`, `events list/get`, `rsvp get`, and `rsvp set --status going`. The full approved command surface is specified in `spec/commands.md`. RSVP `not-going` and `interested` return `rsvp_status_unverified` until their guest endpoints are captured.
 
 Build with Go 1.22 or later (no Node or npm required):
 
