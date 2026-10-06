@@ -6,7 +6,22 @@ Built for the same workflow as [partiful-cli](https://github.com/KalebCole/parti
 
 ## Status
 
-Scaffold. The command surface is specified in `spec/commands.md` and the API research is in `docs/RESEARCH.md`. Not yet functional — see the build plan below.
+The Go CLI skeleton implements `--version`, `schema`, and `doctor`. The full approved command surface is specified in `spec/commands.md`; `schema` includes future commands with `implemented: false`. The `auth`, `events`, and `rsvp` command groups are not implemented yet.
+
+Build with Go 1.22 or later (no Node or npm required):
+
+```bash
+go build -o luma ./cmd/luma
+./luma --version
+./luma schema
+./luma doctor
+```
+
+`doctor` makes a read-only GET to `https://api.luma.com/user` with an eight-second timeout. It checks `LUMA_AUTH_SESSION_KEY` and verifies authentication when a valid session key is present. It always exits 0 for diagnostic results; JSON includes `data.healthy` and separate authentication and connectivity checks. Missing credentials, rejected sessions, and connection failures appear in those checks. It never prints credentials or server response bodies.
+
+Output defaults to JSON when piped and a human table on a terminal; `--json` forces JSON. `schema` always prints JSON and `--version` prints the version string (default `dev`). Global `--dry-run` is accepted for future mutations; it does not suppress read-only checks. Errors are JSON envelopes on stderr with a nonzero exit code.
+
+Release builds can set the version with `go build -ldflags '-X main.version=1.0.0' -o luma ./cmd/luma`.
 
 ## Quick start (once built)
 

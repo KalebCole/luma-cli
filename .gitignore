@@ -1,6 +1,6 @@
 # Binaries
-luma
-luma-cli
+/luma
+/luma-cli
 dist/
 
 # Go
