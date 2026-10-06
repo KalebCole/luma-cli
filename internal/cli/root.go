@@ -125,6 +125,17 @@ func (c *CLI) execute(args []string) error {
 				}
 				continue
 			}
+			if len(positional) >= 2 && positional[0] == "rsvp" && positional[1] == "set" && (arg == "--message" || strings.HasPrefix(arg, "--message=")) {
+				positional = append(positional, arg)
+				if arg == "--message" {
+					if i+1 >= len(args) || strings.HasPrefix(args[i+1], "--") {
+						return usageError("missing_message", "--message requires text.")
+					}
+					i++
+					positional = append(positional, args[i])
+				}
+				continue
+			}
 			if len(positional) >= 2 && positional[0] == "rsvp" && positional[1] == "set" && (arg == "--status" || strings.HasPrefix(arg, "--status=")) {
 				positional = append(positional, arg)
 				if arg == "--status" {
@@ -171,7 +182,7 @@ func (c *CLI) help(opts Options) error {
 			},
 		})
 	}
-	_, err := fmt.Fprintln(c.out, "Usage: luma [--json] [--dry-run] <command>\n\nCommands:\n  schema   Print the full v1 command catalog as JSON\n  doctor   Check authentication and connectivity (read-only)\n  auth     login [--key <key>], status, logout\n  events   list [--upcoming | --past] [--limit 10], get <event-id>\n  rsvp     get <event-id>, set <event-id> --status going|not-going|interested\n\nFlags:\n  --version   Print version\n  --json      Force JSON output\n  --dry-run   Validate without dispatching (mutations only)\n  --help, -h  Show help")
+	_, err := fmt.Fprintln(c.out, "Usage: luma [--json] [--dry-run] <command>\n\nCommands:\n  schema   Print the full v1 command catalog as JSON\n  doctor   Check authentication and connectivity (read-only)\n  auth     login [--key <key>], status, logout\n  events   list [--upcoming | --past] [--limit 10], get <event-id>\n  rsvp     get <event-id>, set <event-id> --status going|not-going|interested [--message <text>]\n\nFlags:\n  --version   Print version\n  --json      Force JSON output\n  --dry-run   Validate without dispatching (mutations only)\n  --help, -h  Show help")
 	return err
 }
 

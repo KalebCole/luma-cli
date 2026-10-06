@@ -199,7 +199,10 @@ func TestRSVPValidation(t *testing.T) {
 		{[]string{"rsvp", "set", "evt-1", "--status="}, "invalid_status"},
 		{[]string{"rsvp", "set", "evt-1", "--status=invalid-secret"}, "invalid_status"},
 		{[]string{"rsvp", "set", "evt-1", "--status=going", "--status=going"}, "duplicate_status"},
-		{[]string{"rsvp", "set", "evt-1", "--status", "not-going"}, "rsvp_status_unverified"},
+		{[]string{"rsvp", "set", "evt-1", "--status=going", "--message=text"}, "invalid_message"},
+		{[]string{"rsvp", "set", "evt-1", "--status=not-going", "--message"}, "missing_message"},
+		{[]string{"rsvp", "set", "evt-1", "--status=not-going", "--message=", "--message=text"}, "duplicate_message"},
+		{[]string{"rsvp", "set", "evt-1", "--status=interested"}, "rsvp_status_unverified"},
 		{[]string{"rsvp", "set", "evt-1", "--status=interested", "--dry-run"}, "rsvp_status_unverified"},
 	} {
 		var out, errOut bytes.Buffer
@@ -213,7 +216,7 @@ func TestRSVPValidation(t *testing.T) {
 		if json.Unmarshal(errOut.Bytes(), &result) != nil || result.OK || result.Error.Code != tc.code {
 			t.Fatalf("incorrect error: %s", &errOut)
 		}
-		if tc.code == "rsvp_status_unverified" && (result.Error.Type != "unsupported" || !strings.Contains(result.Error.Message, "browser network tab")) {
+		if tc.code == "rsvp_status_unverified" && (result.Error.Type != "unsupported" || !strings.Contains(result.Error.Message, "no interested state")) {
 			t.Fatal("missing unsupported explanation")
 		}
 	}
@@ -303,5 +306,138 @@ func TestRSVPMissingCredential(t *testing.T) {
 	var out, errOut bytes.Buffer
 	if New("test", &out, &errOut).Run([]string{"rsvp", "get", "evt-test"}) != 1 || !strings.Contains(errOut.String(), "missing_session_key") || out.Len() != 0 {
 		t.Fatalf("incorrect missing credential error: %s", &errOut)
+	}
+}
+
+func TestRSVPSetNotGoing(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		flags   []string
+		message any
+		dry     bool
+		status  int
+		body    string
+	}{
+		{name: "null-message", status: 200, body: `{}`},
+		{name: "message", flags: []string{"--message", "Sorry, I cannot attend."}, message: "Sorry, I cannot attend.", status: 201, body: `{"status":"anything"}`},
+		{name: "empty-message", flags: []string{"--message="}, message: "", status: 202},
+		{name: "no-content", status: 204},
+		{name: "plain-text", status: 200, body: "Accepted"},
+		{name: "dry-run-null", dry: true},
+		{name: "dry-run-message", flags: []string{"--message=Thank you!"}, message: "Thank you!", dry: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			wantBody := map[string]any{"event_api_id": "evt-test", "decline_message": tc.message}
+			rsvpServer(t, func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				if tc.dry {
+					t.Error("dry-run dispatched a request")
+				}
+				if r.Method != "POST" || r.URL.Path != "/event/decline-my-registration" || r.URL.RawQuery != "" {
+					t.Error("incorrect decline endpoint")
+				}
+				if r.Header.Get("Cookie") != "luma.auth-session-key=usr-test.secret" || r.Header.Get("Accept") != "application/json" || r.Header.Get("Content-Type") != "application/json" || r.Header.Get("Origin") != "https://luma.com" || r.Header.Get("x-luma-client-type") != "luma-web" {
+					t.Error("incorrect decline headers")
+				}
+				var body map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil || !reflect.DeepEqual(body, wantBody) {
+					t.Errorf("incorrect decline body: %#v (%v)", body, err)
+				}
+				w.WriteHeader(tc.status)
+				io.WriteString(w, tc.body)
+			})
+			args := append([]string{"rsvp", "set", "evt-test", "--status", "not-going"}, tc.flags...)
+			if tc.dry {
+				args = append(args, "--dry-run")
+			}
+			var out, errOut bytes.Buffer
+			c := New("test", &out, &errOut)
+			c.isTTY = tc.dry // Dry-runs must remain JSON on a terminal.
+			if c.Run(args) != 0 || errOut.Len() != 0 {
+				t.Fatalf("decline failed: %s", &errOut)
+			}
+			wantData := map[string]any{"eventId": "evt-test", "intent": "not-going", "submitted": !tc.dry}
+			if tc.dry {
+				wantData["dryRun"] = true
+				wantData["request"] = map[string]any{
+					"method": "POST", "url": "https://api.luma.com/event/decline-my-registration", "body": wantBody,
+					"headers": map[string]any{"Accept": "application/json", "Content-Type": "application/json", "Origin": "https://luma.com", "x-luma-client-type": "luma-web", "Cookie": "[REDACTED]"},
+				}
+			}
+			var result map[string]any
+			if json.Unmarshal(out.Bytes(), &result) != nil || !reflect.DeepEqual(result, map[string]any{"ok": true, "data": wantData}) {
+				t.Fatalf("incorrect result: %s", &out)
+			}
+			if (tc.dry && calls != 0) || (!tc.dry && calls != 1) {
+				t.Fatalf("unexpected request count: %d", calls)
+			}
+			if strings.Contains(out.String()+errOut.String(), "usr-test.secret") {
+				t.Fatal("credential leaked")
+			}
+		})
+	}
+}
+
+func TestRSVPDeclineFailures(t *testing.T) {
+	for _, tc := range []struct {
+		status int
+		code   string
+	}{
+		{400, "invalid_request"},
+		{401, "session_rejected"},
+	} {
+		t.Run(tc.code, func(t *testing.T) {
+			calls := 0
+			rsvpServer(t, func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				if r.Method != "POST" || r.URL.Path != "/event/decline-my-registration" {
+					t.Error("unexpected request")
+				}
+				w.WriteHeader(tc.status)
+				io.WriteString(w, `{"message":"usr-test.secret"}`)
+			})
+			var out, errOut bytes.Buffer
+			if New("test", &out, &errOut).Run([]string{"rsvp", "set", "evt-test", "--status=not-going"}) != 1 || out.Len() != 0 || calls != 1 {
+				t.Fatalf("expected decline error: %s", &errOut)
+			}
+			var result struct {
+				OK    bool
+				Error Error
+			}
+			if json.Unmarshal(errOut.Bytes(), &result) != nil || result.OK || result.Error.Code != tc.code || result.Error.Type == "" || result.Error.Message == "" || strings.Contains(errOut.String(), "usr-test.secret") {
+				t.Fatalf("incorrect error envelope: %s", &errOut)
+			}
+		})
+	}
+}
+
+func TestRSVPGetAfterDecline(t *testing.T) {
+	declined := false
+	rsvpServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method + " " + r.URL.Path {
+		case "POST /event/decline-my-registration":
+			declined = true
+			w.WriteHeader(http.StatusNoContent)
+		case "GET /event/get":
+			if !declined || r.URL.Query().Get("event_api_id") != "evt-test" {
+				t.Error("unexpected RSVP lookup")
+			}
+			io.WriteString(w, `{"guest_data":{"approval_status":"declined"}}`)
+		default:
+			t.Error("unexpected endpoint")
+		}
+	})
+	var out, errOut bytes.Buffer
+	c := New("test", &out, &errOut)
+	if c.Run([]string{"rsvp", "set", "evt-test", "--status=not-going"}) != 0 {
+		t.Fatalf("decline failed: %s", &errOut)
+	}
+	out.Reset()
+	if c.Run([]string{"rsvp", "get", "evt-test"}) != 0 || errOut.Len() != 0 {
+		t.Fatalf("lookup failed: %s", &errOut)
+	}
+	if strings.TrimSpace(out.String()) != `{"data":{"eventId":"evt-test","myRsvp":"not-going"},"ok":true}` {
+		t.Fatalf("incorrect declined RSVP: %s", &out)
 	}
 }

@@ -48,17 +48,24 @@ func New() *Client {
 // "event_api_id": {"evt-123"}}). Query values are URL-encoded; nil is allowed.
 // Paths must not contain a host, query string, or fragment.
 func (c *Client) Get(path string, query url.Values) (any, error) {
-	return c.request(http.MethodGet, path, query, nil)
+	return c.request(http.MethodGet, path, query, nil, true)
 }
 
 // Post encodes body as JSON and sends it to a root-relative endpoint. It adds
 // the headers required by Luma's web client. A nil body is encoded as JSON null.
 // Post dispatches immediately; callers own mutation validation and dry-run.
 func (c *Client) Post(path string, body any) (any, error) {
-	return c.request(http.MethodPost, path, nil, body)
+	return c.request(http.MethodPost, path, nil, body, true)
 }
 
-func (c *Client) request(method, path string, query url.Values, body any) (any, error) {
+// PostWithoutResponse sends JSON with the same headers as Post and accepts any
+// 2xx response without requiring a JSON response body.
+func (c *Client) PostWithoutResponse(path string, body any) error {
+	_, err := c.request(http.MethodPost, path, nil, body, false)
+	return err
+}
+
+func (c *Client) request(method, path string, query url.Values, body any, decodeResponse bool) (any, error) {
 	u, err := url.Parse(path)
 	if err != nil || !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") ||
 		u.IsAbs() || u.Host != "" || u.RawQuery != "" || u.ForceQuery || strings.Contains(path, "#") {
@@ -105,7 +112,7 @@ func (c *Client) request(method, path string, query url.Values, body any) (any, 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, statusError(resp.StatusCode)
 	}
-	if resp.StatusCode == http.StatusNoContent {
+	if !decodeResponse || resp.StatusCode == http.StatusNoContent {
 		return nil, nil
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))

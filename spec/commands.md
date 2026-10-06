@@ -39,8 +39,8 @@ List output per event: `eventId`, `title`, `start` (UTC ISO), `timezone`,
 ```bash
 luma rsvp get <event-id>                                   # your current RSVP state
 luma rsvp set <event-id> --status going                   # accept
-luma rsvp set <event-id> --status not-going               # decline
-luma rsvp set <event-id> --status interested              # maybe
+luma rsvp set <event-id> --status not-going [--message "text"] # decline
+luma rsvp set <event-id> --status interested              # unsupported by Luma
 ```
 
 `rsvp set` requires `--dry-run` support and must print the normalized request

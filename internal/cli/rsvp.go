@@ -16,6 +16,11 @@ type registration struct {
 	Tickets     map[string]ticketSelection `json:"ticket_type_to_selection"`
 }
 
+type decline struct {
+	EventID string  `json:"event_api_id"`
+	Message *string `json:"decline_message"`
+}
+
 type ticketSelection struct {
 	Count  int `json:"count"`
 	Amount int `json:"amount"`
@@ -30,6 +35,7 @@ func (c *CLI) rsvp(opts Options, args []string) error {
 		return usageError("unknown_command", "Use rsvp get or rsvp set.")
 	}
 	var eventID, status string
+	var message *string
 	for i := 1; i < len(args); i++ {
 		arg := args[i]
 		if action == "set" && (arg == "--status" || strings.HasPrefix(arg, "--status=")) {
@@ -48,6 +54,19 @@ func (c *CLI) rsvp(opts Options, args []string) error {
 			if status != "going" && status != "not-going" && status != "interested" {
 				return usageError("invalid_status", "--status must be going, not-going, or interested.")
 			}
+		} else if action == "set" && (arg == "--message" || strings.HasPrefix(arg, "--message=")) {
+			if message != nil {
+				return usageError("duplicate_message", "Specify --message only once.")
+			}
+			value := strings.TrimPrefix(arg, "--message=")
+			if arg == "--message" {
+				if i+1 >= len(args) {
+					return usageError("missing_message", "--message requires text.")
+				}
+				i++
+				value = args[i]
+			}
+			message = &value
 		} else {
 			if eventID != "" {
 				return usageError("unexpected_arguments", "Specify exactly one event ID.")
@@ -66,17 +85,24 @@ func (c *CLI) rsvp(opts Options, args []string) error {
 		if status == "" {
 			return usageError("missing_status", "--status is required.")
 		}
-		if status != "going" {
-			return &Error{Type: "unsupported", Code: "rsvp_status_unverified", Message: "The guest RSVP endpoint for not-going and interested is unverified. Capture it from the browser network tab during an RSVP on luma.com."}
+		if status == "interested" {
+			return &Error{Type: "unsupported", Code: "rsvp_status_unverified", Message: "Luma's guest model has no interested state, and its web client has no endpoint for it."}
+		}
+		if message != nil && status != "not-going" {
+			return usageError("invalid_message", "--message is only supported with --status not-going.")
 		}
 	}
-	response, err := c.apiClient.Get("/event/get", url.Values{"event_api_id": {eventID}})
-	if err != nil {
-		return err
-	}
-	event, ok := response.(map[string]any)
-	if !ok {
-		return invalidRSVPResponse()
+	var event map[string]any
+	if action == "get" || status == "going" {
+		response, err := c.apiClient.Get("/event/get", url.Values{"event_api_id": {eventID}})
+		if err != nil {
+			return err
+		}
+		var ok bool
+		event, ok = response.(map[string]any)
+		if !ok {
+			return invalidRSVPResponse()
+		}
 	}
 	if action == "get" {
 		state, err := rsvpState(event)
@@ -93,29 +119,39 @@ func (c *CLI) rsvp(opts Options, args []string) error {
 		_, err = fmt.Fprintf(c.out, "Event: %s\nRSVP: %s\n", eventID, label)
 		return err
 	}
-	body, err := c.registration(eventID, event)
-	if err != nil {
-		return err
+	path := "/event/decline-my-registration"
+	var body any = decline{EventID: eventID, Message: message}
+	if status == "going" {
+		path = "/event/register"
+		registrationBody, err := c.registration(eventID, event)
+		if err != nil {
+			return err
+		}
+		body = registrationBody
 	}
 	if opts.DryRun {
 		// Always emit the complete normalized request, including on a terminal.
 		return c.writeJSON(map[string]any{"ok": true, "data": map[string]any{
 			"eventId": eventID, "intent": status, "submitted": false, "dryRun": true,
-			"request": map[string]any{"method": "POST", "url": "https://api.luma.com/event/register", "headers": map[string]string{"Accept": "application/json", "Content-Type": "application/json", "Origin": "https://luma.com", "x-luma-client-type": "luma-web", "Cookie": "[REDACTED]"}, "body": body},
+			"request": map[string]any{"method": "POST", "url": "https://api.luma.com" + path, "headers": map[string]string{"Accept": "application/json", "Content-Type": "application/json", "Origin": "https://luma.com", "x-luma-client-type": "luma-web", "Cookie": "[REDACTED]"}, "body": body},
 		}})
 	}
-	result, err := c.apiClient.Post("/event/register", body)
-	if err != nil {
+	if status == "going" {
+		result, err := c.apiClient.Post(path, body)
+		if err != nil {
+			return err
+		}
+		object, ok := result.(map[string]any)
+		if !ok || object["status"] != "success" {
+			return &Error{Type: "api", Code: "rsvp_registration_failed", Message: "Luma did not confirm registration with status:success."}
+		}
+	} else if err := c.apiClient.PostWithoutResponse(path, body); err != nil {
 		return err
-	}
-	object, ok := result.(map[string]any)
-	if !ok || object["status"] != "success" {
-		return &Error{Type: "api", Code: "rsvp_registration_failed", Message: "Luma did not confirm registration with status:success."}
 	}
 	if opts.JSON {
 		return c.writeJSON(map[string]any{"ok": true, "data": map[string]any{"eventId": eventID, "intent": status, "submitted": true}})
 	}
-	_, err = fmt.Fprintf(c.out, "Event: %s\nRSVP intent: going\nSubmitted: yes\n", eventID)
+	_, err := fmt.Fprintf(c.out, "Event: %s\nRSVP intent: %s\nSubmitted: yes\n", eventID, status)
 	return err
 }
 

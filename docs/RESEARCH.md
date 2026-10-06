@@ -34,6 +34,7 @@ tooling must use the internal web API below.
 | GET | `/discover/get-paginated-events?discover_place_api_id=...&pagination_limit=20` | City event feed. Resolve a city via `/url?url=<city-slug>` first. |
 | GET | `/url?url=<slug-or-city>` | Resolve a luma.com slug to `kind` (`event`, `discover-place`, `calendar`, `user`) + object. |
 | POST | `/event/register` | Guest registration for going; see the supplied contract below. |
+| POST | `/event/decline-my-registration` | Decline your registration as not-going; verified from Luma's own event-page JavaScript. |
 | POST | `/event/create` | Host-side event creation (single call, strict silent validator — out of scope for v1). |
 
 ## Guest RSVP contract
@@ -73,12 +74,29 @@ The supplied implementation contract pins down guest registration for `going`:
 validate and normalize the request, prints the POST method, URL, headers
 (with `Cookie` redacted), and body, and never dispatches the POST.
 
-There is **no verified guest-side endpoint** for `not-going` or `interested`.
-Both return `type: unsupported`, `code: rsvp_status_unverified`, including
-in dry-run mode, without making API requests. Capture the endpoint and
-request/response shapes from the browser network tab during an RSVP on
-luma.com before adding support. Do not guess `/event/rsvp` or a host-side
-endpoint. No live API calls were made during implementation validation.
+The decline endpoint was verified from Luma's own event-page JavaScript:
+POST `https://api.luma.com/event/decline-my-registration` with this body:
+
+```json
+{"event_api_id":"evt-XXX","decline_message":null}
+```
+
+`decline_message` is optional free text to the host. The CLI accepts
+`--message` and sends null when it is absent. `invite_secret_key` is needed
+only when declining a pending invite and is omitted in the normal registration
+decline flow. Any HTTP 2xx response confirms submission; no response-body
+status field is required. The same authenticated web-client headers as the
+`going` flow apply. After declining, GET `/event/get` reports root
+`guest_data.approval_status: "declined"`, normalized to `myRsvp: "not-going"`.
+
+`rsvp set --status not-going --dry-run` prints the normalized POST method,
+URL, headers (with `Cookie` redacted), and body without any API requests.
+
+Luma's guest model has no `interested` state. Searching 112 JavaScript chunks
+from Luma's web client found zero hits for an interested endpoint.
+`rsvp set --status interested` continues to return `type: unsupported`,
+`code: rsvp_status_unverified`, including in dry-run mode, without making API
+requests. No live API calls were made during implementation validation.
 
 ## Gotchas
 

@@ -34,7 +34,7 @@ var catalog = []commandSpec{
 	}},
 	{Name: "events get", Description: "Get full event details.", Implemented: true, Arguments: []string{"event-id"}},
 	{Name: "rsvp get", Description: "Get your current RSVP state.", Implemented: true, Arguments: []string{"event-id"}},
-	{Name: "rsvp set", Description: "Register as going; not-going and interested return rsvp_status_unverified because their endpoints are unverified.", Implemented: true, Arguments: []string{"event-id"}, Mutation: true, DryRun: true, Flags: []flagSpec{{Name: "--status", Type: "string", Description: "Requested RSVP state.", Required: true, Values: []string{"going", "not-going", "interested"}}}},
+	{Name: "rsvp set", Description: "Register as going or decline as not-going; interested returns rsvp_status_unverified because Luma has no interested state.", Implemented: true, Arguments: []string{"event-id"}, Mutation: true, DryRun: true, Flags: []flagSpec{{Name: "--status", Type: "string", Description: "Requested RSVP state.", Required: true, Values: []string{"going", "not-going", "interested"}}, {Name: "--message", Type: "string", Description: "Optional message to the host when declining with --status not-going."}}},
 }
 
 func (c *CLI) schema(_ Options, args []string) error {
