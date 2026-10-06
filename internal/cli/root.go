@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/KalebCole/luma-cli/internal/api"
 	"golang.org/x/term"
 )
 
@@ -67,13 +68,7 @@ func (c *CLI) Run(args []string) int {
 
 // Error is the public error representation. Messages must never contain
 // credentials, request headers, or untrusted server response bodies.
-type Error struct {
-	Type    string `json:"type"`
-	Code    string `json:"code"`
-	Message string `json:"message"`
-}
-
-func (e *Error) Error() string { return e.Message }
+type Error = api.Error
 
 func usageError(code, message string) error {
 	return &Error{Type: "usage", Code: code, Message: message}
