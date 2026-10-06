@@ -56,7 +56,7 @@ func (c *CLI) events(opts Options, args []string) error {
 		if len(args) != 2 || strings.TrimSpace(args[1]) == "" {
 			return usageError("invalid_event_id", "Use events get <event-id>.")
 		}
-		response, err := c.eventsClient.Get("/event/get", url.Values{"event_api_id": {args[1]}})
+		response, err := c.apiClient.Get("/event/get", url.Values{"event_api_id": {args[1]}})
 		if err != nil {
 			return err
 		}
@@ -136,7 +136,7 @@ func (c *CLI) eventsList(opts Options, args []string) error {
 	if past {
 		period = "past"
 	}
-	response, err := c.eventsClient.Get("/user", nil)
+	response, err := c.apiClient.Get("/user", nil)
 	if err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func (c *CLI) eventsList(opts Options, args []string) error {
 	if calendarID == "" {
 		return invalidEventResponse()
 	}
-	response, err = c.eventsClient.Get("/calendar/get-items", url.Values{
+	response, err = c.apiClient.Get("/calendar/get-items", url.Values{
 		"calendar_api_id": {calendarID}, "period": {period}, "pagination_limit": {strconv.Itoa(limit)},
 	})
 	if err != nil {
