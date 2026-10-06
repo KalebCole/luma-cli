@@ -34,10 +34,11 @@ type CLI struct {
 	isTTY        bool
 	commands     []command
 	doctorClient *http.Client
+	eventsClient *api.Client
 }
 
 func New(version string, stdout, stderr io.Writer) *CLI {
-	c := &CLI{version: version, out: stdout, errOut: stderr, doctorClient: newDoctorClient()}
+	c := &CLI{version: version, out: stdout, errOut: stderr, doctorClient: newDoctorClient(), eventsClient: api.New()}
 	if f, ok := stdout.(*os.File); ok {
 		c.isTTY = term.IsTerminal(int(f.Fd()))
 	}
@@ -45,6 +46,7 @@ func New(version string, stdout, stderr io.Writer) *CLI {
 		{name: "schema", run: c.schema},
 		{name: "doctor", run: c.doctor},
 		{name: "auth", run: c.auth},
+		{name: "events", run: c.events},
 	}
 	return c
 }
@@ -100,6 +102,17 @@ func (c *CLI) execute(args []string) error {
 		case "--help", "-h":
 			help = true
 		default:
+			if len(positional) >= 2 && positional[0] == "events" && positional[1] == "list" && (arg == "--upcoming" || arg == "--past" || arg == "--limit" || strings.HasPrefix(arg, "--limit=")) {
+				positional = append(positional, arg)
+				if arg == "--limit" {
+					if i+1 >= len(args) || strings.HasPrefix(args[i+1], "--") {
+						return usageError("invalid_limit", "--limit requires a positive integer.")
+					}
+					i++
+					positional = append(positional, args[i])
+				}
+				continue
+			}
 			if len(positional) == 2 && positional[0] == "auth" && positional[1] == "login" && (arg == "--key" || strings.HasPrefix(arg, "--key=")) {
 				positional = append(positional, arg)
 				if arg == "--key" {
@@ -141,12 +154,12 @@ func (c *CLI) help(opts Options) error {
 			"ok": true,
 			"data": map[string]any{
 				"usage":    "luma [--json] [--dry-run] <command>",
-				"commands": []string{"schema", "doctor", "auth"},
+				"commands": []string{"schema", "doctor", "auth", "events"},
 				"flags":    []string{"--version", "--json", "--dry-run", "--help"},
 			},
 		})
 	}
-	_, err := fmt.Fprintln(c.out, "Usage: luma [--json] [--dry-run] <command>\n\nCommands:\n  schema   Print the full v1 command catalog as JSON\n  doctor   Check authentication and connectivity (read-only)\n  auth     login [--key <key>], status, logout\n\nFlags:\n  --version   Print version\n  --json      Force JSON output\n  --dry-run   Validate without dispatching (mutations only)\n  --help, -h  Show help")
+	_, err := fmt.Fprintln(c.out, "Usage: luma [--json] [--dry-run] <command>\n\nCommands:\n  schema   Print the full v1 command catalog as JSON\n  doctor   Check authentication and connectivity (read-only)\n  auth     login [--key <key>], status, logout\n  events   list [--upcoming | --past] [--limit 10], get <event-id>\n\nFlags:\n  --version   Print version\n  --json      Force JSON output\n  --dry-run   Validate without dispatching (mutations only)\n  --help, -h  Show help")
 	return err
 }
 

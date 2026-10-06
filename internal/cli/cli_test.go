@@ -55,7 +55,7 @@ func TestSchemaMatchesSpec(t *testing.T) {
 		if cmd.Mutation && !cmd.DryRun {
 			t.Fatalf("mutation %q lacks dry-run", cmd.Name)
 		}
-		if cmd.Implemented != (cmd.Name == "--version" || cmd.Name == "schema" || cmd.Name == "doctor" || strings.HasPrefix(cmd.Name, "auth ")) {
+		if cmd.Implemented != (cmd.Name == "--version" || cmd.Name == "schema" || cmd.Name == "doctor" || strings.HasPrefix(cmd.Name, "auth ") || strings.HasPrefix(cmd.Name, "events ")) {
 			t.Fatalf("wrong implementation status for %q", cmd.Name)
 		}
 	}

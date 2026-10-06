@@ -27,12 +27,12 @@ var catalog = []commandSpec{
 	{Name: "auth login", Description: "Store the browser session key from LUMA_AUTH_SESSION_KEY or --key without prompts.", Implemented: true, Mutation: true, DryRun: true, Flags: []flagSpec{{Name: "--key", Type: "string", Description: "Browser session key (usr-<id>.<secret>)."}}},
 	{Name: "auth status", Description: "Report authentication status and expiry if known.", Implemented: true},
 	{Name: "auth logout", Description: "Clear the stored credential.", Implemented: true, Mutation: true, DryRun: true},
-	{Name: "events list", Description: "List invitations and RSVPs.", Flags: []flagSpec{
+	{Name: "events list", Description: "List invitations and RSVPs.", Implemented: true, Flags: []flagSpec{
 		{Name: "--upcoming", Type: "boolean", Description: "List upcoming invitations and RSVPs."},
 		{Name: "--past", Type: "boolean", Description: "List event history."},
 		{Name: "--limit", Type: "integer", Description: "Maximum number of events."},
 	}},
-	{Name: "events get", Description: "Get full event details.", Arguments: []string{"event-id"}},
+	{Name: "events get", Description: "Get full event details.", Implemented: true, Arguments: []string{"event-id"}},
 	{Name: "rsvp get", Description: "Get your current RSVP state.", Arguments: []string{"event-id"}},
 	{Name: "rsvp set", Description: "Set your RSVP state.", Arguments: []string{"event-id"}, Mutation: true, DryRun: true, Flags: []flagSpec{{Name: "--status", Type: "string", Description: "Requested RSVP state.", Required: true, Values: []string{"going", "not-going", "interested"}}}},
 }
