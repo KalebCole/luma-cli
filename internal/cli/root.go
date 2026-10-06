@@ -34,10 +34,11 @@ type CLI struct {
 	isTTY        bool
 	commands     []command
 	doctorClient *http.Client
+	apiClient    *api.Client
 }
 
 func New(version string, stdout, stderr io.Writer) *CLI {
-	c := &CLI{version: version, out: stdout, errOut: stderr, doctorClient: newDoctorClient()}
+	c := &CLI{version: version, out: stdout, errOut: stderr, doctorClient: newDoctorClient(), apiClient: api.New()}
 	if f, ok := stdout.(*os.File); ok {
 		c.isTTY = term.IsTerminal(int(f.Fd()))
 	}
@@ -45,6 +46,7 @@ func New(version string, stdout, stderr io.Writer) *CLI {
 		{name: "schema", run: c.schema},
 		{name: "doctor", run: c.doctor},
 		{name: "auth", run: c.auth},
+		{name: "rsvp", run: c.rsvp},
 	}
 	return c
 }
@@ -111,6 +113,17 @@ func (c *CLI) execute(args []string) error {
 				}
 				continue
 			}
+			if len(positional) >= 2 && positional[0] == "rsvp" && positional[1] == "set" && (arg == "--status" || strings.HasPrefix(arg, "--status=")) {
+				positional = append(positional, arg)
+				if arg == "--status" {
+					if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
+						return usageError("missing_status", "--status requires going, not-going, or interested.")
+					}
+					i++
+					positional = append(positional, args[i])
+				}
+				continue
+			}
 			if strings.HasPrefix(arg, "-") {
 				return usageError("unknown_flag", "Unknown flag. Use --help for available flags.")
 			}
@@ -141,12 +154,12 @@ func (c *CLI) help(opts Options) error {
 			"ok": true,
 			"data": map[string]any{
 				"usage":    "luma [--json] [--dry-run] <command>",
-				"commands": []string{"schema", "doctor", "auth"},
+				"commands": []string{"schema", "doctor", "auth", "rsvp"},
 				"flags":    []string{"--version", "--json", "--dry-run", "--help"},
 			},
 		})
 	}
-	_, err := fmt.Fprintln(c.out, "Usage: luma [--json] [--dry-run] <command>\n\nCommands:\n  schema   Print the full v1 command catalog as JSON\n  doctor   Check authentication and connectivity (read-only)\n  auth     login [--key <key>], status, logout\n\nFlags:\n  --version   Print version\n  --json      Force JSON output\n  --dry-run   Validate without dispatching (mutations only)\n  --help, -h  Show help")
+	_, err := fmt.Fprintln(c.out, "Usage: luma [--json] [--dry-run] <command>\n\nCommands:\n  schema   Print the full v1 command catalog as JSON\n  doctor   Check authentication and connectivity (read-only)\n  auth     login [--key <key>], status, logout\n  rsvp     get <event-id>, set <event-id> --status going|not-going|interested\n\nFlags:\n  --version   Print version\n  --json      Force JSON output\n  --dry-run   Validate without dispatching (mutations only)\n  --help, -h  Show help")
 	return err
 }
 

@@ -6,7 +6,7 @@ Built for the same workflow as [partiful-cli](https://github.com/KalebCole/parti
 
 ## Status
 
-The Go CLI implements `--version`, `schema`, `doctor`, and `auth login/status/logout`. The full approved command surface is specified in `spec/commands.md`; `schema` includes future commands with `implemented: false`. The `events` and `rsvp` command groups are not implemented yet.
+The Go CLI implements `--version`, `schema`, `doctor`, `auth login/status/logout`, `rsvp get`, and `rsvp set --status going`. The full approved command surface is specified in `spec/commands.md`; `schema` includes future commands with `implemented: false`. The `events` group is not implemented yet. RSVP `not-going` and `interested` return `rsvp_status_unverified` until their guest endpoints are captured.
 
 Build with Go 1.22 or later (no Node or npm required):
 
@@ -19,7 +19,7 @@ go build -o luma ./cmd/luma
 
 `doctor` makes a read-only GET to `https://api.luma.com/user` with an eight-second timeout. It checks `LUMA_AUTH_SESSION_KEY` (falling back to the stored credential) and verifies authentication when a valid session key is present. It always exits 0 for diagnostic results; JSON includes `data.healthy` and separate authentication and connectivity checks. Missing credentials, rejected sessions, and connection failures appear in those checks. It never prints credentials or server response bodies.
 
-Output defaults to JSON when piped and a human table on a terminal; `--json` forces JSON. `schema` always prints JSON and `--version` prints the version string (default `dev`). Global `--dry-run` validates auth mutations and prints their action with credentials redacted; it does not suppress read-only checks. Errors are JSON envelopes on stderr with a nonzero exit code.
+Output defaults to JSON when piped and a human table on a terminal; `--json` forces JSON. `schema` always prints JSON and `--version` prints the version string (default `dev`). Global `--dry-run` validates auth mutations and prints their action with credentials redacted; RSVP dry-run fetches the event and user, then prints the normalized registration request with its Cookie redacted without sending the POST; it does not suppress read-only checks. Errors are JSON envelopes on stderr with a nonzero exit code.
 
 Release builds can set the version with `go build -ldflags '-X main.version=1.0.0' -o luma ./cmd/luma`.
 
@@ -40,7 +40,8 @@ luma events list --upcoming
 
 # 4. RSVP
 luma rsvp set <event-id> --status going
-luma rsvp set <event-id> --status not-going
+luma rsvp get <event-id>
+luma rsvp set <event-id> --status going --dry-run
 ```
 
 ## Authentication
@@ -60,7 +61,7 @@ Go packages can call `auth.SessionKey() (string, error)` to read the stored key.
 1. `internal/api` — HTTP client for `https://api.luma.com` with the session cookie header. Start from the endpoint catalog in `docs/RESEARCH.md`.
 2. `internal/auth` — `auth login` (paste session key into local credential store), `auth status`, `auth logout`, `doctor`.
 3. `internal/events` — `events list --upcoming` via `/calendar/get-items` on the personal calendar (`personal_calendar_api_id` from `/user`), plus `--past`.
-4. `internal/rsvp` — `rsvp get`, `rsvp set --status going|not-going|interested`. The exact RSVP/register endpoint is the one open research item — see `docs/RESEARCH.md`.
+4. `internal/cli/rsvp.go` — implemented `rsvp get` and `rsvp set --status going` via `/event/register`; unverified statuses return an unsupported error. See `docs/RESEARCH.md`.
 5. Mirror partiful-cli conventions: `--json` default when piped, `--dry-run` on mutations, `schema` command for the machine-readable catalog, JSON error envelopes.
 
 ## Layout
@@ -70,7 +71,7 @@ cmd/luma          CLI entrypoint
 internal/api      api.luma.com client
 internal/auth     login / status / logout / doctor
 internal/events   events list
-internal/rsvp     rsvp get / set
+internal/cli       command registration, output, and rsvp get / set
 docs/RESEARCH.md  endpoint catalog and auth notes
 spec/commands.md  approved command surface
 skills/           agent skill (mirrors partiful-cli layout)

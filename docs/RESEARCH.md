@@ -33,17 +33,52 @@ tooling must use the internal web API below.
 | GET | `/search/get-results?query=...` | Search events, calendars, places. |
 | GET | `/discover/get-paginated-events?discover_place_api_id=...&pagination_limit=20` | City event feed. Resolve a city via `/url?url=<city-slug>` first. |
 | GET | `/url?url=<slug-or-city>` | Resolve a luma.com slug to `kind` (`event`, `discover-place`, `calendar`, `user`) + object. |
+| POST | `/event/register` | Guest registration for going; see the supplied contract below. |
 | POST | `/event/create` | Host-side event creation (single call, strict silent validator — out of scope for v1). |
 
-## Open research item: the RSVP endpoint
+## Guest RSVP contract
 
-The exact guest RSVP/register call is **not pinned down** in the sources above.
-`mariovallereyes/luma-skill` exposes `luma rsvp <slug> <yes|no|maybe|waitlist>`,
-so a working call exists — port it from that repo or capture it from the
-browser network tab while RSVPing on luma.com. Likely candidates to probe:
-`/event/register`, `/event/rsvp`, ticket-type endpoints under `/event/`.
-Whichever it is, wrap it as `rsvp set --status going|not-going|interested`
-and record the request/response shapes here once verified.
+The supplied implementation contract pins down guest registration for `going`:
+
+1. GET `/event/get?event_api_id=<id>`. Read the current guest's RSVP from
+   `guest_data` at the response root, not from `event.guest_data`. A missing
+   or null guest is returned as `myRsvp: null`. Canonical RSVP states are
+   preserved; `approved` and `declined` approval states normalize to `going`
+   and `not-going`.
+2. For registration, select the first root `ticket_types[]` entry's `api_id`.
+3. GET `/user` for `name`, `first_name`, `last_name`, and `email` (the identity
+   may be at the root or under `user`). When only `name` is returned, split at
+   its first space for the first and last names. A name and email are required.
+4. POST `/event/register` with this body:
+
+   ```json
+   {
+     "name": "Ada Lovelace",
+     "first_name": "Ada",
+     "last_name": "Lovelace",
+     "email": "ada@example.com",
+     "event_api_id": "evt-XXX",
+     "for_waitlist": false,
+     "ticket_type_to_selection": {
+       "ticket-XXX": {"count": 1, "amount": 0}
+     }
+   }
+   ```
+
+   Require `{"status":"success"}` in the response; HTTP success alone does
+   not confirm registration. This contract uses count 1 and amount 0 and
+   does not implement paid checkout or ticket selection options.
+
+`rsvp set --status going --dry-run` performs the two read-only lookups to
+validate and normalize the request, prints the POST method, URL, headers
+(with `Cookie` redacted), and body, and never dispatches the POST.
+
+There is **no verified guest-side endpoint** for `not-going` or `interested`.
+Both return `type: unsupported`, `code: rsvp_status_unverified`, including
+in dry-run mode, without making API requests. Capture the endpoint and
+request/response shapes from the browser network tab during an RSVP on
+luma.com before adding support. Do not guess `/event/rsvp` or a host-side
+endpoint. No live API calls were made during implementation validation.
 
 ## Gotchas
 
