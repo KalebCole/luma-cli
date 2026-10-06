@@ -1,0 +1,12 @@
+# Binaries
+luma
+luma-cli
+dist/
+
+# Go
+*.test
+*.out
+
+# Local config / credentials — never commit the session key
+.env
+config.toml
